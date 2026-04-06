@@ -2,9 +2,8 @@ import { useRef, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 
-const PARTICLE_COUNT = 5000;
+const PARTICLE_COUNT = 6000;
 
-// Simple 3D noise using sin combinations
 const noise3D = (x: number, y: number, z: number, t: number): number => {
   return (
     Math.sin(x * 1.2 + t * 0.8) * Math.cos(y * 1.1 + t * 0.6) * 0.5 +
@@ -15,48 +14,83 @@ const noise3D = (x: number, y: number, z: number, t: number): number => {
   );
 };
 
+// Generate a soft circle texture for particles
+const createParticleTexture = (): THREE.Texture => {
+  const size = 64;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d")!;
+  const center = size / 2;
+  const gradient = ctx.createRadialGradient(center, center, 0, center, center, center);
+  gradient.addColorStop(0, "rgba(255,255,255,1)");
+  gradient.addColorStop(0.3, "rgba(255,255,255,0.8)");
+  gradient.addColorStop(0.7, "rgba(255,255,255,0.2)");
+  gradient.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+  const tex = new THREE.CanvasTexture(canvas);
+  return tex;
+};
+
 const ParticleSphere = () => {
   const points = useRef<THREE.Points>(null!);
+  const texture = useMemo(() => createParticleTexture(), []);
 
-  const { basePositions, colors, baseSizes } = useMemo(() => {
-    const basePositions = new Float32Array(PARTICLE_COUNT * 3);
-    const colors = new Float32Array(PARTICLE_COUNT * 3);
-    const baseSizes = new Float32Array(PARTICLE_COUNT);
+  const { basePositions, colors, baseSizes, layers } = useMemo(() => {
+    const total = PARTICLE_COUNT;
+    const basePositions = new Float32Array(total * 3);
+    const colors = new Float32Array(total * 3);
+    const baseSizes = new Float32Array(total);
+    const layers = new Float32Array(total); // 0=core, 1=surface, 2=atmosphere
+
     const color = new THREE.Color();
 
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
+    for (let i = 0; i < total; i++) {
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(2 * Math.random() - 1);
-      const r = 2;
+
+      let r: number;
+      let layer: number;
+
+      if (i < total * 0.2) {
+        // Dense core particles
+        r = Math.random() * 1.2;
+        layer = 0;
+      } else if (i < total * 0.85) {
+        // Surface shell
+        r = 1.8 + (Math.random() - 0.5) * 0.4;
+        layer = 1;
+      } else {
+        // Atmosphere / floating particles
+        r = 2.2 + Math.random() * 0.8;
+        layer = 2;
+      }
 
       basePositions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
       basePositions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
       basePositions[i * 3 + 2] = r * Math.cos(phi);
 
-      // Aqua-cyan-blue liquid palette
-      const hue = 0.52 + Math.random() * 0.12;
-      const sat = 0.7 + Math.random() * 0.3;
-      const light = 0.45 + Math.random() * 0.35;
+      const hue = 0.55 + Math.random() * 0.1;
+      const sat = layer === 0 ? 0.9 : 0.7 + Math.random() * 0.3;
+      const light = layer === 0 ? 0.7 : layer === 2 ? 0.3 + Math.random() * 0.2 : 0.5 + Math.random() * 0.3;
       color.setHSL(hue, sat, light);
       colors[i * 3] = color.r;
       colors[i * 3 + 1] = color.g;
       colors[i * 3 + 2] = color.b;
 
-      baseSizes[i] = 0.015 + Math.random() * 0.025;
+      baseSizes[i] = layer === 0 ? 0.04 + Math.random() * 0.03 : layer === 2 ? 0.01 + Math.random() * 0.015 : 0.02 + Math.random() * 0.025;
+      layers[i] = layer;
     }
 
-    return { basePositions, colors, baseSizes };
+    return { basePositions, colors, baseSizes, layers };
   }, []);
-
-  const posArray = useMemo(() => new Float32Array(PARTICLE_COUNT * 3), []);
-  const sizeArray = useMemo(() => new Float32Array(PARTICLE_COUNT), []);
 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
 
-    // Slow organic rotation
-    points.current.rotation.y = t * 0.08;
-    points.current.rotation.x = Math.sin(t * 0.05) * 0.15;
+    points.current.rotation.y = t * 0.06;
+    points.current.rotation.x = Math.sin(t * 0.04) * 0.12;
 
     const posAttr = points.current.geometry.attributes.position;
     const sizeAttr = points.current.geometry.attributes.size;
@@ -66,28 +100,31 @@ const ParticleSphere = () => {
     const cArr = colorAttr.array as Float32Array;
 
     const color = new THREE.Color();
-
-    // Chameleon: slowly shifting base hue over time
-    const baseHue = (t * 0.04) % 1;
+    const baseHue = (t * 0.035) % 1;
 
     for (let i = 0; i < PARTICLE_COUNT; i++) {
       const i3 = i * 3;
       const bx = basePositions[i3];
       const by = basePositions[i3 + 1];
       const bz = basePositions[i3 + 2];
+      const layer = layers[i];
 
       const len = Math.sqrt(bx * bx + by * by + bz * bz);
       const nx = bx / len;
       const ny = by / len;
       const nz = bz / len;
 
-      // Liquid deformation
-      const deform1 = noise3D(nx * 2, ny * 2, nz * 2, t * 0.6) * 0.35;
-      const deform2 = noise3D(nx * 4, ny * 4, nz * 4, t * 0.9) * 0.12;
-      const deform3 = noise3D(nx * 1.2, ny * 1.2, nz * 1.2, t * 0.3) * 0.2;
-      const breath = Math.sin(t * 0.8 + i * 0.0003) * 0.08;
-      const dripPhase = Math.sin(t * 0.4 + nx * 3 + nz * 2);
-      const drip = ny < -0.3 ? Math.max(0, dripPhase) * 0.15 * Math.abs(ny) : 0;
+      // Layer-specific deformation intensity
+      const intensity = layer === 0 ? 0.6 : layer === 2 ? 1.5 : 1;
+      const speed = layer === 0 ? 0.4 : layer === 2 ? 0.8 : 0.6;
+
+      const deform1 = noise3D(nx * 2, ny * 2, nz * 2, t * speed) * 0.35 * intensity;
+      const deform2 = noise3D(nx * 4, ny * 4, nz * 4, t * speed * 1.5) * 0.12 * intensity;
+      const deform3 = noise3D(nx * 1.2, ny * 1.2, nz * 1.2, t * speed * 0.5) * 0.2 * intensity;
+      const breath = Math.sin(t * 0.7 + i * 0.0003) * 0.1;
+
+      const dripPhase = Math.sin(t * 0.35 + nx * 3 + nz * 2);
+      const drip = ny < -0.3 && layer === 1 ? Math.max(0, dripPhase) * 0.2 * Math.abs(ny) : 0;
 
       const totalDeform = deform1 + deform2 + deform3 + breath;
       const r = len + totalDeform;
@@ -96,18 +133,22 @@ const ParticleSphere = () => {
       pArr[i3 + 1] = ny * r - drip;
       pArr[i3 + 2] = nz * r;
 
-      // Chameleon color: spatial noise drives hue variation across the surface
-      const hueNoise = noise3D(nx * 1.5, ny * 1.5, nz * 1.5, t * 0.15) * 0.15;
-      const hue = (baseHue + hueNoise + i * 0.00005) % 1;
-      const sat = 0.75 + Math.sin(t * 0.5 + i * 0.001) * 0.2;
-      const light = 0.45 + deform1 * 0.3 + Math.sin(t * 2 + i * 0.005) * 0.1;
-      color.setHSL(hue, Math.min(1, Math.max(0.4, sat)), Math.min(0.8, Math.max(0.3, light)));
+      // Chameleon color with spatial waves
+      const hueNoise = noise3D(nx * 1.5, ny * 1.5, nz * 1.5, t * 0.12) * 0.18;
+      const hue = (baseHue + hueNoise + layer * 0.05 + i * 0.00003) % 1;
+      const sat = 0.7 + Math.sin(t * 0.4 + i * 0.001) * 0.2;
+      const light = layer === 0
+        ? 0.6 + Math.sin(t * 1.5 + i * 0.01) * 0.2
+        : layer === 2
+          ? 0.3 + Math.sin(t * 0.8 + i * 0.005) * 0.15
+          : 0.45 + deform1 * 0.3 + Math.sin(t * 2 + i * 0.005) * 0.1;
+
+      color.setHSL(hue, Math.min(1, Math.max(0.4, sat)), Math.min(0.85, Math.max(0.2, light)));
       cArr[i3] = color.r;
       cArr[i3 + 1] = color.g;
       cArr[i3 + 2] = color.b;
 
-      // Size pulsation
-      const sizePulse = 1 + Math.sin(t * 3 + i * 0.02) * 0.3 + deform1 * 0.5;
+      const sizePulse = 1 + Math.sin(t * 2.5 + i * 0.015) * 0.35 + deform1 * 0.4;
       sArr[i] = baseSizes[i] * Math.max(0.3, sizePulse);
     }
 
@@ -119,33 +160,20 @@ const ParticleSphere = () => {
   return (
     <points ref={points}>
       <bufferGeometry>
-        <bufferAttribute
-          attach="attributes-position"
-          count={PARTICLE_COUNT}
-          array={basePositions.slice()}
-          itemSize={3}
-        />
-        <bufferAttribute
-          attach="attributes-color"
-          count={PARTICLE_COUNT}
-          array={colors}
-          itemSize={3}
-        />
-        <bufferAttribute
-          attach="attributes-size"
-          count={PARTICLE_COUNT}
-          array={baseSizes.slice()}
-          itemSize={1}
-        />
+        <bufferAttribute attach="attributes-position" count={PARTICLE_COUNT} array={basePositions.slice()} itemSize={3} />
+        <bufferAttribute attach="attributes-color" count={PARTICLE_COUNT} array={colors.slice()} itemSize={3} />
+        <bufferAttribute attach="attributes-size" count={PARTICLE_COUNT} array={baseSizes.slice()} itemSize={1} />
       </bufferGeometry>
       <pointsMaterial
-        size={0.04}
+        map={texture}
+        size={0.06}
         vertexColors
         transparent
-        opacity={0.85}
+        opacity={0.9}
         sizeAttenuation
         blending={THREE.AdditiveBlending}
         depthWrite={false}
+        alphaTest={0.01}
       />
     </points>
   );
