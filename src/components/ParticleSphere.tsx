@@ -60,8 +60,15 @@ const ParticleSphere = () => {
 
     const posAttr = points.current.geometry.attributes.position;
     const sizeAttr = points.current.geometry.attributes.size;
+    const colorAttr = points.current.geometry.attributes.color;
     const pArr = posAttr.array as Float32Array;
     const sArr = sizeAttr.array as Float32Array;
+    const cArr = colorAttr.array as Float32Array;
+
+    const color = new THREE.Color();
+
+    // Chameleon: slowly shifting base hue over time
+    const baseHue = (t * 0.04) % 1;
 
     for (let i = 0; i < PARTICLE_COUNT; i++) {
       const i3 = i * 3;
@@ -69,21 +76,16 @@ const ParticleSphere = () => {
       const by = basePositions[i3 + 1];
       const bz = basePositions[i3 + 2];
 
-      // Normalize to get direction
       const len = Math.sqrt(bx * bx + by * by + bz * bz);
       const nx = bx / len;
       const ny = by / len;
       const nz = bz / len;
 
-      // Multiple layers of noise for liquid-like deformation
+      // Liquid deformation
       const deform1 = noise3D(nx * 2, ny * 2, nz * 2, t * 0.6) * 0.35;
       const deform2 = noise3D(nx * 4, ny * 4, nz * 4, t * 0.9) * 0.12;
       const deform3 = noise3D(nx * 1.2, ny * 1.2, nz * 1.2, t * 0.3) * 0.2;
-
-      // Breathing pulse
       const breath = Math.sin(t * 0.8 + i * 0.0003) * 0.08;
-
-      // Drip effect - particles occasionally stretch downward
       const dripPhase = Math.sin(t * 0.4 + nx * 3 + nz * 2);
       const drip = ny < -0.3 ? Math.max(0, dripPhase) * 0.15 * Math.abs(ny) : 0;
 
@@ -94,13 +96,24 @@ const ParticleSphere = () => {
       pArr[i3 + 1] = ny * r - drip;
       pArr[i3 + 2] = nz * r;
 
-      // Size pulsation for liquid shimmer
+      // Chameleon color: spatial noise drives hue variation across the surface
+      const hueNoise = noise3D(nx * 1.5, ny * 1.5, nz * 1.5, t * 0.15) * 0.15;
+      const hue = (baseHue + hueNoise + i * 0.00005) % 1;
+      const sat = 0.75 + Math.sin(t * 0.5 + i * 0.001) * 0.2;
+      const light = 0.45 + deform1 * 0.3 + Math.sin(t * 2 + i * 0.005) * 0.1;
+      color.setHSL(hue, Math.min(1, Math.max(0.4, sat)), Math.min(0.8, Math.max(0.3, light)));
+      cArr[i3] = color.r;
+      cArr[i3 + 1] = color.g;
+      cArr[i3 + 2] = color.b;
+
+      // Size pulsation
       const sizePulse = 1 + Math.sin(t * 3 + i * 0.02) * 0.3 + deform1 * 0.5;
       sArr[i] = baseSizes[i] * Math.max(0.3, sizePulse);
     }
 
     posAttr.needsUpdate = true;
     sizeAttr.needsUpdate = true;
+    colorAttr.needsUpdate = true;
   });
 
   return (
