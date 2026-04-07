@@ -120,23 +120,30 @@ const ParticleSphere = ({ isMobile = false }: ParticleSphereProps) => {
       const ny = by / len;
       const nz = bz / len;
 
-      const intensity = layer === 0 ? 0.6 : layer === 2 ? 1.5 : 1;
-      const speed = layer === 0 ? 0.4 : layer === 2 ? 0.8 : 0.6;
+      const intensity = layer === 0 ? 0.8 : layer === 2 ? 2.0 : 1.4;
+      const speed = layer === 0 ? 0.6 : layer === 2 ? 1.0 : 0.8;
 
-      const deform1 = noise3D(nx * 2, ny * 2, nz * 2, t * speed) * 0.35 * intensity;
-      const deform2 = noise3D(nx * 4, ny * 4, nz * 4, t * speed * 1.5) * 0.12 * intensity;
-      const deform3 = noise3D(nx * 1.2, ny * 1.2, nz * 1.2, t * speed * 0.5) * 0.2 * intensity;
-      const breath = Math.sin(t * 0.7 + i * 0.0003) * 0.1;
+      const deform1 = noise3D(nx * 2, ny * 2, nz * 2, t * speed) * 0.45 * intensity;
+      const deform2 = noise3D(nx * 4, ny * 4, nz * 4, t * speed * 1.5) * 0.18 * intensity;
+      const deform3 = noise3D(nx * 1.2, ny * 1.2, nz * 1.2, t * speed * 0.5) * 0.25 * intensity;
+      const deform4 = noise3D(nx * 6, ny * 6, nz * 6, t * speed * 2.5) * 0.07 * intensity;
+      const breath = Math.sin(t * 0.9 + i * 0.0003) * 0.15 + Math.sin(t * 1.7 + i * 0.001) * 0.06;
 
-      const dripPhase = Math.sin(t * 0.35 + nx * 3 + nz * 2);
-      const drip = ny < -0.3 && layer === 1 ? Math.max(0, dripPhase) * 0.2 * Math.abs(ny) : 0;
+      // Organic tendrils reaching outward
+      const tendril = Math.pow(Math.max(0, noise3D(nx * 3, ny * 3, nz * 3, t * 0.4)), 2) * 0.6 * (layer === 1 ? 1 : 0.3);
 
-      const totalDeform = deform1 + deform2 + deform3 + breath;
+      const dripPhase = Math.sin(t * 0.5 + nx * 3 + nz * 2);
+      const drip = ny < -0.2 && layer === 1 ? Math.max(0, dripPhase) * 0.35 * Math.abs(ny) : 0;
+
+      // Splash upward effect
+      const splash = ny > 0.5 && layer === 1 ? Math.max(0, Math.sin(t * 0.6 + nz * 4)) * 0.15 * ny : 0;
+
+      const totalDeform = deform1 + deform2 + deform3 + deform4 + breath + tendril;
       const r = len + totalDeform;
 
-      pArr[i3] = nx * r;
-      pArr[i3 + 1] = ny * r - drip;
-      pArr[i3 + 2] = nz * r;
+      pArr[i3] = nx * r + Math.sin(t * 1.3 + i * 0.01) * 0.02 * intensity;
+      pArr[i3 + 1] = ny * r - drip + splash;
+      pArr[i3 + 2] = nz * r + Math.cos(t * 1.1 + i * 0.01) * 0.02 * intensity;
 
       const hueNoise = noise3D(nx * 1.5, ny * 1.5, nz * 1.5, t * 0.12) * 0.18;
       const hue = (baseHue + hueNoise + layer * 0.05 + i * 0.00003) % 1;
