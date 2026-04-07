@@ -2,8 +2,6 @@ import { useRef, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 
-const PARTICLE_COUNT = 6000;
-
 const noise3D = (x: number, y: number, z: number, t: number): number => {
   return (
     Math.sin(x * 1.2 + t * 0.8) * Math.cos(y * 1.1 + t * 0.6) * 0.5 +
@@ -14,7 +12,6 @@ const noise3D = (x: number, y: number, z: number, t: number): number => {
   );
 };
 
-// Generate a soft circle texture for particles
 const createParticleTexture = (): THREE.Texture => {
   const size = 64;
   const canvas = document.createElement("canvas");
@@ -29,11 +26,15 @@ const createParticleTexture = (): THREE.Texture => {
   gradient.addColorStop(1, "rgba(255,255,255,0)");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, size, size);
-  const tex = new THREE.CanvasTexture(canvas);
-  return tex;
+  return new THREE.CanvasTexture(canvas);
 };
 
-const ParticleSphere = () => {
+interface ParticleSphereProps {
+  isMobile?: boolean;
+}
+
+const ParticleSphere = ({ isMobile = false }: ParticleSphereProps) => {
+  const PARTICLE_COUNT = isMobile ? 3000 : 6000;
   const points = useRef<THREE.Points>(null!);
   const texture = useMemo(() => createParticleTexture(), []);
 
@@ -42,8 +43,7 @@ const ParticleSphere = () => {
     const basePositions = new Float32Array(total * 3);
     const colors = new Float32Array(total * 3);
     const baseSizes = new Float32Array(total);
-    const layers = new Float32Array(total); // 0=core, 1=surface, 2=atmosphere
-
+    const layers = new Float32Array(total);
     const color = new THREE.Color();
 
     for (let i = 0; i < total; i++) {
@@ -54,15 +54,12 @@ const ParticleSphere = () => {
       let layer: number;
 
       if (i < total * 0.2) {
-        // Dense core particles
         r = Math.random() * 1.2;
         layer = 0;
       } else if (i < total * 0.85) {
-        // Surface shell
         r = 1.8 + (Math.random() - 0.5) * 0.4;
         layer = 1;
       } else {
-        // Atmosphere / floating particles
         r = 2.2 + Math.random() * 0.8;
         layer = 2;
       }
@@ -84,9 +81,16 @@ const ParticleSphere = () => {
     }
 
     return { basePositions, colors, baseSizes, layers };
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [PARTICLE_COUNT]);
+
+  // On mobile, update every other frame for performance
+  const frameCounter = useRef(0);
 
   useFrame(({ clock }) => {
+    frameCounter.current++;
+    if (isMobile && frameCounter.current % 2 !== 0) return;
+
     const t = clock.getElapsedTime();
 
     points.current.rotation.y = t * 0.06;
@@ -114,7 +118,6 @@ const ParticleSphere = () => {
       const ny = by / len;
       const nz = bz / len;
 
-      // Layer-specific deformation intensity
       const intensity = layer === 0 ? 0.6 : layer === 2 ? 1.5 : 1;
       const speed = layer === 0 ? 0.4 : layer === 2 ? 0.8 : 0.6;
 
@@ -133,7 +136,6 @@ const ParticleSphere = () => {
       pArr[i3 + 1] = ny * r - drip;
       pArr[i3 + 2] = nz * r;
 
-      // Chameleon color with spatial waves
       const hueNoise = noise3D(nx * 1.5, ny * 1.5, nz * 1.5, t * 0.12) * 0.18;
       const hue = (baseHue + hueNoise + layer * 0.05 + i * 0.00003) % 1;
       const sat = 0.7 + Math.sin(t * 0.4 + i * 0.001) * 0.2;
@@ -166,7 +168,7 @@ const ParticleSphere = () => {
       </bufferGeometry>
       <pointsMaterial
         map={texture}
-        size={0.06}
+        size={isMobile ? 0.08 : 0.06}
         vertexColors
         transparent
         opacity={0.9}
