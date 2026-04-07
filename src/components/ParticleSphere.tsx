@@ -159,8 +159,8 @@ const ParticleSphere = ({ isMobile = false }: ParticleSphereProps) => {
       cArr[i3 + 1] = color.g;
       cArr[i3 + 2] = color.b;
 
-      const sizePulse = 1 + Math.sin(t * 2.5 + i * 0.015) * 0.35 + deform1 * 0.4;
-      sArr[i] = baseSizes[i] * Math.max(0.3, sizePulse);
+      const sizePulse = 1 + Math.sin(t * 3 + i * 0.015) * 0.45 + deform1 * 0.5 + Math.sin(t * 5 + i * 0.1) * 0.1;
+      sArr[i] = baseSizes[i] * Math.max(0.2, sizePulse);
     }
 
     posAttr.needsUpdate = true;
