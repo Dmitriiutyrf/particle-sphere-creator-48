@@ -8,7 +8,9 @@ const noise3D = (x: number, y: number, z: number, t: number): number => {
     Math.sin(y * 1.5 + t * 0.7) * Math.cos(z * 1.3 + t * 0.9) * 0.4 +
     Math.sin(z * 1.1 + t * 1.1) * Math.cos(x * 1.4 + t * 0.5) * 0.3 +
     Math.sin(x * 2.3 + y * 1.8 + t * 1.3) * 0.2 +
-    Math.sin(z * 2.1 + x * 1.6 + t * 0.4) * Math.cos(y * 2.4 + t * 0.8) * 0.15
+    Math.sin(z * 2.1 + x * 1.6 + t * 0.4) * Math.cos(y * 2.4 + t * 0.8) * 0.15 +
+    Math.sin(x * 3.7 + z * 2.9 + t * 1.7) * Math.cos(y * 3.1 + t * 1.2) * 0.12 +
+    Math.sin(y * 4.1 + x * 3.3 + t * 2.1) * 0.08
   );
 };
 
